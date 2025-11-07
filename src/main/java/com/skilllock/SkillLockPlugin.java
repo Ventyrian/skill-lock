@@ -1,0 +1,242 @@
+package com.skilllock;
+
+import com.google.inject.Provides;
+import javax.inject.Inject;
+
+import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Client;
+import net.runelite.api.MenuAction;
+import net.runelite.api.MenuEntry;
+import net.runelite.api.events.GameTick;
+import net.runelite.api.events.MenuOpened;
+import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetInfo;
+import net.runelite.client.config.ConfigManager;
+import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.plugins.Plugin;
+import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.overlay.OverlayManager;
+
+import java.util.ArrayList;
+
+@Slf4j
+@PluginDescriptor(
+	name = "Skill Lock"
+)
+public class SkillLockPlugin extends Plugin
+{
+	@Inject
+	private Client client;
+
+    @Inject
+    private OverlayManager overlayManager;
+
+    @Inject
+    private SkillLockOverlay overlay;
+
+    @Inject
+    private ConfigManager configManager;
+
+    private boolean skillsTabWasOpen = false;
+    private boolean needsLocationUpdate = false;
+    public ArrayList<SkillLocation> skillLocations =  new ArrayList<>();
+    private final String[] SKILL_NAMES = {"attack","hitpoints","mining","strength","agility","smithing","defense","herblore","fishing","ranged","thieving","cooking","prayer","crafting","firemaking","magic","fletching","woodcutting","runecrafting","slayer","farming","construction","hunter","sailing"};
+
+
+    @Override
+	protected void startUp() throws Exception
+	{
+		log.debug("Skill Lock started!");
+        skillsTabWasOpen = false;
+        needsLocationUpdate = false;
+        skillLocations.clear();
+	}
+
+	@Override
+	protected void shutDown() throws Exception
+	{
+		log.debug("Skill Lock stopped!");
+        overlayManager.remove(overlay);
+	}
+
+    private void checkAndUpdateOverlay()
+    {
+        boolean isOpen = isSkillsTabOpen();
+
+        if (isOpen && !skillsTabWasOpen)
+        {
+            skillLocations = createSkillLocations(); // ← Recalculate fresh
+            overlayManager.add(overlay);
+            log.debug("Skills tab opened → overlay added + locations recalculated");
+        }
+        else if (!isOpen && skillsTabWasOpen)
+        {
+            overlayManager.remove(overlay);
+            log.debug("Skills tab closed → overlay removed");
+        }
+
+        skillsTabWasOpen = isOpen;
+    }
+
+    public Widget getSkillWidget()
+    {
+        return client.getWidget(WidgetInfo.SKILLS_CONTAINER);
+    }
+
+    @Data
+    public static class SkillLocation
+    {
+        public final String name;
+        public final int x;
+        public final int y;
+        public final boolean isLocked;
+    }
+
+    public ArrayList<SkillLocation> createSkillLocations() {
+
+
+        final Widget skillContainer = getSkillWidget();
+        // Make sure skillContainer is not null
+        if (skillContainer == null || skillContainer.isHidden() || skillContainer.getCanvasLocation() == null)
+        {
+            return new  ArrayList<>();
+        }
+
+
+        // Define starting values for X and Y
+        final int baseX = skillContainer.getCanvasLocation().getX();
+        final int baseY = skillContainer.getCanvasLocation().getY() + 1;
+
+        // Create an array list with the correct length
+        ArrayList<SkillLocation> locations = new ArrayList<>(SKILL_NAMES.length);
+
+        for (int i = 0; i< SKILL_NAMES.length; i++ )
+        {
+            String name =  SKILL_NAMES[i];
+            String val = configManager.getConfiguration("skilllock",name,String.class);
+            boolean locked = "true".equalsIgnoreCase(val);
+
+            // 3 columns, 8 rows
+            int col = i % 3;
+            int row = i / 3;
+
+            int RECT_WIDTH = SkillLockOverlay.RECT_WIDTH;
+            int x = baseX + col * RECT_WIDTH;
+            int RECT_HEIGHT = SkillLockOverlay.RECT_HEIGHT;
+            int y = baseY + row * RECT_HEIGHT;
+
+            locations.add(new SkillLocation(name, x, y, locked));
+        }
+
+        return locations;
+    }
+
+    private boolean isSkillsTabOpen()
+    {
+        Widget skillsRoot = getSkillWidget();
+        return skillsRoot != null && !skillsRoot.isHidden();
+    }
+
+    private boolean getSkillLockState(String skill)
+    {
+        // Use ConfigManager directly — no switch needed!
+        String value = configManager.getConfiguration("skilllock", skill, String.class);
+        return "true".equalsIgnoreCase(value);
+    }
+
+    private void toggleSkillLock(String skill)
+    {
+        boolean current = getSkillLockState(skill);
+        boolean newState = !current;
+
+        // Update config
+        configManager.setConfiguration("skilllock", skill, newState);
+
+        // Force immediate update
+        needsLocationUpdate = true;
+
+        log.debug("Toggled {} lock: {}", skill, newState ? "LOCKED" : "UNLOCKED");
+    }
+
+    @Subscribe
+    public void onMenuOpened (MenuOpened event)
+    {
+        // Make sure skills tab is open
+        if (!isSkillsTabOpen()) return;
+
+        // Get menu entries and make sure it is a skill we have right-clicked
+        MenuEntry[] menuEntries = event.getMenuEntries();
+        if (menuEntries[3] == null || !menuEntries[3].getOption().startsWith("View") || !menuEntries[3].getOption().endsWith("guide")) return;
+
+        // Get the skill name from the menu entry
+        String skillName = menuEntries[3].getOption().split(" ")[1].replaceAll("<col=\\w{6}>([^<]+)</col>", "$1");
+        // Normalize it for the config name
+        String configName = skillName.toLowerCase();
+
+        // Create the custom menu entry
+        MenuEntry toggle = client.createMenuEntry(0)
+                .setOption("Toggle Lock")
+                .setTarget("<col=ff981f>" + skillName + "</col>")
+                .setType(MenuAction.RUNELITE)
+                .onClick(e -> {
+                    toggleSkillLock(configName);
+                });
+
+        // Create new menuEntry array and have toggle right before cancel
+        MenuEntry[] newMenuEntries = new MenuEntry[]{menuEntries[0], toggle, menuEntries[1], menuEntries[2], menuEntries[3]};
+
+        client.setMenuEntries(newMenuEntries);
+
+    }
+
+
+    @Subscribe
+    public void onGameTick (GameTick event)
+    {
+        // First tick: safe to access client
+        if (!skillsTabWasOpen && isSkillsTabOpen())
+        {
+            // First time skills tab is detected open
+            skillLocations = createSkillLocations();
+        }
+
+        checkAndUpdateOverlay();
+
+        if (needsLocationUpdate && isSkillsTabOpen())
+        {
+            skillLocations = createSkillLocations();
+            needsLocationUpdate = false;
+            //log.debug("Skill locations updated from config change: {}", skillLocations);
+        }
+    }
+
+    @Subscribe
+    public void onWidgetLoaded(WidgetLoaded event)
+    {
+        if (event.getGroupId() == WidgetInfo.SKILLS_CONTAINER.getGroupId())
+        {
+            skillLocations = createSkillLocations();
+            //log.debug("skill locations {}", skillLocations);
+        }
+    }
+
+    @Subscribe
+    public void onConfigChanged(ConfigChanged event)
+    {
+        if ("skilllock".equals(event.getGroup()))
+        {
+            needsLocationUpdate = true;
+            //log.debug("Config changed, scheduled to update skill locations");
+        }
+    }
+
+
+	@Provides
+    SkillLockConfig provideConfig(ConfigManager configManager)
+	{
+		return configManager.getConfig(SkillLockConfig.class);
+	}
+}
