@@ -5,6 +5,7 @@ import javax.inject.Inject;
 
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
@@ -13,14 +14,17 @@ import net.runelite.api.events.MenuOpened;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetInfo;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.game.chatbox.ChatboxPanelManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @PluginDescriptor(
@@ -30,6 +34,12 @@ public class SkillLockPlugin extends Plugin
 {
 	@Inject
 	private Client client;
+
+    @Inject
+    private ChatboxPanelManager chatboxPanelManager;
+
+    @Inject
+    private ClientThread clientThread;
 
     @Inject
     private OverlayManager overlayManager;
@@ -43,7 +53,7 @@ public class SkillLockPlugin extends Plugin
     private boolean skillsTabWasOpen = false;
     private boolean needsLocationUpdate = false;
     public ArrayList<SkillLocation> skillLocations =  new ArrayList<>();
-    private final String[] SKILL_NAMES = {"attack","hitpoints","mining","strength","agility","smithing","defense","herblore","fishing","ranged","thieving","cooking","prayer","crafting","firemaking","magic","fletching","woodcutting","runecrafting","slayer","farming","construction","hunter","sailing"};
+    private final String[] SKILL_NAMES = {"attack","hitpoints","mining","strength","agility","smithing","defense","herblore","fishing","ranged","thieving","cooking","prayer","crafting","firemaking","magic","fletching","woodcutting","runecraft","slayer","farming","construction","hunter","sailing"};
 
 
     @Override
@@ -93,6 +103,7 @@ public class SkillLockPlugin extends Plugin
         public final int x;
         public final int y;
         public final boolean isLocked;
+        public final int level;
     }
 
     public ArrayList<SkillLocation> createSkillLocations() {
@@ -118,6 +129,8 @@ public class SkillLockPlugin extends Plugin
             String name =  SKILL_NAMES[i];
             String val = configManager.getConfiguration("skilllock",name,String.class);
             boolean locked = "true".equalsIgnoreCase(val);
+            val = configManager.getConfiguration("skilllock",name+"_level",String.class);
+            int level = Integer.parseInt(val);
 
             // 3 columns, 8 rows
             int col = i % 3;
@@ -128,7 +141,7 @@ public class SkillLockPlugin extends Plugin
             int RECT_HEIGHT = SkillLockOverlay.RECT_HEIGHT;
             int y = baseY + row * RECT_HEIGHT;
 
-            locations.add(new SkillLocation(name, x, y, locked));
+            locations.add(new SkillLocation(name, x, y, locked, level));
         }
 
         return locations;
@@ -155,10 +168,67 @@ public class SkillLockPlugin extends Plugin
         // Update config
         configManager.setConfiguration("skilllock", skill, newState);
 
+        // If the skill is being locked also update it's static level
+        if (newState)
+        {
+            configManager.setConfiguration("skilllock", skill+"_level", 0);
+        }
+
         // Force immediate update
         needsLocationUpdate = true;
 
         log.debug("Toggled {} lock: {}", skill, newState ? "LOCKED" : "UNLOCKED");
+    }
+
+    private void openLevelInputDialog( String skillName)
+    {
+        boolean isLocked = getSkillLockState(skillName);
+        AtomicInteger updatedLevel = new AtomicInteger();
+
+        // Only allow if the skill is unlocked
+        if (!isLocked)
+        {
+            clientThread.invokeLater( () ->
+                    chatboxPanelManager.openTextInput("<col=ff9040>SkillLock</col> - Set level for <col=ffff00>" + skillName + "</col>")
+                            .prompt("Enter 1-99 (or 0 to disable)")
+                            .onDone( inputText ->
+                            {
+                                clientThread.invokeLater( () ->
+                                {
+                                    String value = inputText.trim();
+                                    if (value.isEmpty())
+                                    {
+                                        return;
+                                    }
+                                    else
+                                    {
+                                        try
+                                        {
+                                            int level  = Integer.parseInt(value);
+                                            if (level < 0 || level > 99)
+                                            {
+                                                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Level must be 0-99 for " + skillName, null);
+                                                return;
+                                            }
+                                            updatedLevel.set(level);
+                                            client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", skillName.substring(0,1).toUpperCase() + skillName.substring(1) + " level set to " + level, null);
+                                        }
+                                        catch (NumberFormatException e)
+                                        {
+                                            client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Invalid number for " + skillName, null);
+                                            return;
+                                        }
+
+                                    }
+                                    configManager.setConfiguration("skilllock", skillName+"_level", updatedLevel.get());
+                                });
+                            })
+                            .build()
+            );
+        }
+
+
+
     }
 
     @Subscribe
@@ -178,15 +248,34 @@ public class SkillLockPlugin extends Plugin
 
         // Create the custom menu entry
         MenuEntry toggle = client.createMenuEntry(0)
-                .setOption("Toggle Lock")
+                .setOption(getSkillLockState(configName) ? "<col=ff0000>Unlock</col>" : "<col=ff0000>Lock</col>")
                 .setTarget("<col=ff981f>" + skillName + "</col>")
                 .setType(MenuAction.RUNELITE)
                 .onClick(e -> {
                     toggleSkillLock(configName);
                 });
 
-        // Create new menuEntry array and have toggle right before cancel
-        MenuEntry[] newMenuEntries = new MenuEntry[]{menuEntries[0], toggle, menuEntries[1], menuEntries[2], menuEntries[3]};
+        MenuEntry setSkill = client.createMenuEntry(0)
+                .setOption("<col=ff0000>Set</col>")
+                .setTarget("<col=ff981f>" + skillName + "</col> Level")
+                .setType(MenuAction.RUNELITE)
+                .onClick(e -> {
+                    openLevelInputDialog(configName);
+                });
+
+        boolean isLocked = getSkillLockState(configName);
+        MenuEntry[] newMenuEntries = new MenuEntry[]{menuEntries[0], menuEntries[1],menuEntries[2],menuEntries[3]};
+
+        // If the skill is locked only show the toggle button
+        if (isLocked)
+        {
+            newMenuEntries = new MenuEntry[]{menuEntries[0], toggle, menuEntries[1], menuEntries[2], menuEntries[3]};
+        }
+        // Also show the set skill option
+        else
+        {
+            newMenuEntries = new MenuEntry[]{menuEntries[0], setSkill, toggle, menuEntries[1], menuEntries[2], menuEntries[3]};
+        }
 
         client.setMenuEntries(newMenuEntries);
 
