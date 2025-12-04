@@ -13,8 +13,8 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOpened;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.events.WorldChanged;
+import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -97,7 +97,7 @@ public class SkillLockPlugin extends Plugin
 
     public Widget getSkillWidget()
     {
-        return client.getWidget(WidgetInfo.SKILLS_CONTAINER);
+        return client.getWidget(ComponentID.SKILLS_CONTAINER);
     }
 
     @Data
@@ -312,7 +312,7 @@ public class SkillLockPlugin extends Plugin
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded event)
     {
-        if (event.getGroupId() == WidgetInfo.SKILLS_CONTAINER.getGroupId())
+        if (event.getGroupId() == ComponentID.SKILLS_CONTAINER)
         {
             skillLocations = createSkillLocations();
             //log.debug("skill locations {}", skillLocations);
