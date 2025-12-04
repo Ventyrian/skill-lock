@@ -4,12 +4,12 @@ This is my first plugin, and it was designed for use with snowflake accounts tha
 Firstly, download the Skill Lock plugin from the Runelite Plugin Hub.
 You should then see Skill Lock in the plugin configuration list. (You can search skill to filter the list)
 Below is an example of navigating the configuration menu:
-![Configuration Example](https://)
+
+https://github.com/user-attachments/assets/79c37840-9b6f-4c32-ae72-7a9dab3b2665
 
 You can also set these values in game using the context menus from the skills as demonstrated below (Note holding SHIFT while hovering a static skill will reveal the actual level):
-![In game context menu example](https://)
 
-
+https://github.com/user-attachments/assets/fbe54a4e-6897-43e5-a86c-f6ef3974fed1
 
 ## Main Features
 #### NOTE ALL FEATURES ARE PURELY COSMETIC AND DO NOT CHANGE THE ACTUAL VALUES OF YOUR SKILLS OR EXP
