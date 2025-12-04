@@ -2,16 +2,17 @@ package com.skilllock;
 
 import com.google.inject.Provides;
 import javax.inject.Inject;
-
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
+import net.runelite.api.WorldType;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOpened;
 import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.events.WorldChanged;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.callback.ClientThread;
@@ -24,6 +25,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
@@ -53,6 +55,7 @@ public class SkillLockPlugin extends Plugin
     private boolean skillsTabWasOpen = false;
     private boolean needsLocationUpdate = false;
     public ArrayList<SkillLocation> skillLocations =  new ArrayList<>();
+    public boolean membersWorld = false;
     private final String[] SKILL_NAMES = {"attack","hitpoints","mining","strength","agility","smithing","defense","herblore","fishing","ranged","thieving","cooking","prayer","crafting","firemaking","magic","fletching","woodcutting","runecraft","slayer","farming","construction","hunter","sailing"};
 
 
@@ -63,6 +66,7 @@ public class SkillLockPlugin extends Plugin
         skillsTabWasOpen = false;
         needsLocationUpdate = false;
         skillLocations.clear();
+        updateWorldType();
 	}
 
 	@Override
@@ -226,9 +230,12 @@ public class SkillLockPlugin extends Plugin
                             .build()
             );
         }
+    }
 
-
-
+    private void updateWorldType()
+    {
+        EnumSet<WorldType> types = client.getWorldType();
+        membersWorld = types.contains(WorldType.MEMBERS);
     }
 
     @Subscribe
@@ -248,16 +255,16 @@ public class SkillLockPlugin extends Plugin
 
         // Create the custom menu entry
         MenuEntry toggle = client.createMenuEntry(0)
-                .setOption(getSkillLockState(configName) ? "<col=ff0000>Unlock</col>" : "<col=ff0000>Lock</col>")
-                .setTarget("<col=ff981f>" + skillName + "</col>")
+                .setOption(getSkillLockState(configName) ? "Unlock" : "Lock")
+                .setTarget("<col=ff981f>" + skillName + "</col> level")
                 .setType(MenuAction.RUNELITE)
                 .onClick(e -> {
                     toggleSkillLock(configName);
                 });
 
         MenuEntry setSkill = client.createMenuEntry(0)
-                .setOption("<col=ff0000>Set</col>")
-                .setTarget("<col=ff981f>" + skillName + "</col> Level")
+                .setOption("Set")
+                .setTarget("<col=ff981f>" + skillName + "</col> level")
                 .setType(MenuAction.RUNELITE)
                 .onClick(e -> {
                     openLevelInputDialog(configName);
@@ -320,6 +327,12 @@ public class SkillLockPlugin extends Plugin
             needsLocationUpdate = true;
             //log.debug("Config changed, scheduled to update skill locations");
         }
+    }
+
+    @Subscribe
+    public void onWorldChanged(WorldChanged event)
+    {
+        updateWorldType();
     }
 
 
