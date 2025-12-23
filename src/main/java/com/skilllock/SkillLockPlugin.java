@@ -24,6 +24,7 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 
+import java.awt.Rectangle;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -55,8 +56,7 @@ public class SkillLockPlugin extends Plugin
     private boolean skillsTabWasOpen = false;
     private boolean needsLocationUpdate = false;
     public ArrayList<SkillLocation> skillLocations =  new ArrayList<>();
-    public boolean membersWorld = false;
-    private final String[] SKILL_NAMES = {"attack","hitpoints","mining","strength","agility","smithing","defense","herblore","fishing","ranged","thieving","cooking","prayer","crafting","firemaking","magic","fletching","woodcutting","runecraft","slayer","farming","construction","hunter","sailing"};
+    private final String[] SKILL_NAMES = {"attack","hitpoints","mining","strength","agility","smithing","defence","herblore","fishing","ranged","thieving","cooking","prayer","crafting","firemaking","magic","fletching","woodcutting","runecraft","slayer","farming","construction","hunter","sailing"};
 
 
     @Override
@@ -66,7 +66,6 @@ public class SkillLockPlugin extends Plugin
         skillsTabWasOpen = false;
         needsLocationUpdate = false;
         skillLocations.clear();
-        updateWorldType();
 	}
 
 	@Override
@@ -232,12 +231,6 @@ public class SkillLockPlugin extends Plugin
         }
     }
 
-    private void updateWorldType()
-    {
-        EnumSet<WorldType> types = client.getWorldType();
-        membersWorld = types.contains(WorldType.MEMBERS);
-    }
-
     @Subscribe
     public void onMenuOpened (MenuOpened event)
     {
@@ -307,6 +300,7 @@ public class SkillLockPlugin extends Plugin
             needsLocationUpdate = false;
             //log.debug("Skill locations updated from config change: {}", skillLocations);
         }
+
     }
 
     @Subscribe
@@ -328,13 +322,6 @@ public class SkillLockPlugin extends Plugin
             //log.debug("Config changed, scheduled to update skill locations");
         }
     }
-
-    @Subscribe
-    public void onWorldChanged(WorldChanged event)
-    {
-        updateWorldType();
-    }
-
 
 	@Provides
     SkillLockConfig provideConfig(ConfigManager configManager)
