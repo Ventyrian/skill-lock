@@ -20,5 +20,5 @@ https://github.com/user-attachments/assets/fbe54a4e-6897-43e5-a86c-f6ef3974fed1
 - Differentiates between f2p and members when showing tooltips
 
 ## Future Work
-- Fix tooltips for higher level skills
+- ~~Fix tooltips for higher level skills~~ TOOLTIPS ARE NOW WORKING ON ALL LEVELS 
 - Maybe add animation and sound effects for when unlocking skills
