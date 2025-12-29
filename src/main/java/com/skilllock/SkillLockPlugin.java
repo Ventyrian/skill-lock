@@ -2,17 +2,19 @@ package com.skilllock;
 
 import com.google.inject.Provides;
 import javax.inject.Inject;
+import javax.swing.SwingUtilities;
+
 import lombok.Data;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
-import net.runelite.api.WorldType;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOpened;
+import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.WidgetLoaded;
-import net.runelite.api.events.WorldChanged;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
@@ -22,11 +24,11 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.game.chatbox.ChatboxPanelManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.ClientUI;
 import net.runelite.client.ui.overlay.OverlayManager;
-
-import java.awt.Rectangle;
 import java.util.ArrayList;
-import java.util.EnumSet;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
@@ -57,7 +59,8 @@ public class SkillLockPlugin extends Plugin
     private boolean needsLocationUpdate = false;
     public ArrayList<SkillLocation> skillLocations =  new ArrayList<>();
     private final String[] SKILL_NAMES = {"attack","hitpoints","mining","strength","agility","smithing","defence","herblore","fishing","ranged","thieving","cooking","prayer","crafting","firemaking","magic","fletching","woodcutting","runecraft","slayer","farming","construction","hunter","sailing"};
-
+    @Getter
+    private final Map<String, Long> glowingSkills = new ConcurrentHashMap<>();
 
     @Override
 	protected void startUp() throws Exception
@@ -180,6 +183,19 @@ public class SkillLockPlugin extends Plugin
         // Force immediate update
         needsLocationUpdate = true;
 
+        clientThread.invokeLater(() -> configManager.sendConfig());
+
+        // Play sound effect
+        if (current)
+        {
+            client.playSoundEffect(1493);
+            glowingSkills.put(skill, System.currentTimeMillis());
+        }
+        else
+        {
+            client.playSoundEffect(1351);
+        }
+
         log.debug("Toggled {} lock: {}", skill, newState ? "LOCKED" : "UNLOCKED");
     }
 
@@ -281,7 +297,6 @@ public class SkillLockPlugin extends Plugin
 
     }
 
-
     @Subscribe
     public void onGameTick (GameTick event)
     {
@@ -301,6 +316,9 @@ public class SkillLockPlugin extends Plugin
             //log.debug("Skill locations updated from config change: {}", skillLocations);
         }
 
+        // Cleanup glow
+        glowingSkills.entrySet().removeIf( entry -> System.currentTimeMillis() - entry.getValue() > SkillLockOverlay.GLOW_DURATION_MS);
+
     }
 
     @Subscribe
@@ -319,7 +337,37 @@ public class SkillLockPlugin extends Plugin
         if ("skilllock".equals(event.getGroup()))
         {
             needsLocationUpdate = true;
-            //log.debug("Config changed, scheduled to update skill locations");
+
+            String key = event.getKey(); // e.g., "attack", "strength", etc.
+
+            // Check if it's one of the lock boolean keys (not the _level ones)
+            if (key.endsWith("_level") || key.equals("lockSkills") || key.equals("setLevels"))
+            {
+                return;
+            }
+
+            // Get old and new state
+            boolean oldState = Boolean.parseBoolean(event.getOldValue());
+            boolean newState = Boolean.parseBoolean(event.getNewValue());
+
+            if (oldState == newState)
+            {
+                return;
+            }
+            clientThread.invokeLater( () ->
+            {
+                if (!newState)
+                {
+                    // Just UNLOCKED -> play celebration sound + glow
+                    client.playSoundEffect(1493);
+                    glowingSkills.put(key, System.currentTimeMillis());
+                }
+                else
+                {
+                    // Just LOCKED -> play lock sound
+                    client.playSoundEffect(1351);
+                }
+            });
         }
     }
 

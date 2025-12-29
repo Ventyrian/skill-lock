@@ -9,6 +9,7 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.*;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
+import java.awt.BasicStroke;
 import java.awt.Dimension;
 import java.awt.Color;
 import java.awt.Font;
@@ -46,6 +47,14 @@ public class SkillLockOverlay extends Overlay
     public static final int OFFSET_X = 31;
     public static final int OFFSET_Y = 5;
 
+    // Glow constants
+    public static final long GLOW_DURATION_MS = 1200;  // 1.2s to match audio
+    private static final Color GLOW_COLOR = new Color(255, 255, 100);  // Bright yellow (adjust as needed)
+    private static final float PULSE_SPEED = 2.5f;  // Higher = faster pulse
+    private static final int RING_THICKNESS = 4;    // Thickness of the glowing ring
+    private static final int INNER_PADDING = 2;     // Distance from edge (keeps it inside)
+
+    // Boundaries for Tooltip logic
     private static final int RIGHT_SKILL_BOUNDARY_X = 684;
     private static final int LEFT_SKILL_BOUNDARY_X = 607;
     private static final int SKILL_BOUNDARY_Y = 19;
@@ -88,7 +97,7 @@ public class SkillLockOverlay extends Overlay
         String hoverSkill = findHoverSkill();
         Rectangle skillTooltip = null;
         boolean shiftDown = client.isKeyPressed(KeyCode.KC_SHIFT);
-        if (!hoverSkill.isEmpty())
+        if (!hoverSkill.isEmpty() && !client.isMenuOpen())
         {
             // Get the bounds of the skillTooltip
             skillTooltip = getSkillExpTooltipBounds();
@@ -173,10 +182,57 @@ public class SkillLockOverlay extends Overlay
                 graphics.drawString(text, textX, textY);
 
             }
+
+            // Glow logic
+            Long startTime = plugin.getGlowingSkills().get(skillLocation.name);
+            Rectangle bounds = new Rectangle(x, y, RECT_WIDTH, RECT_HEIGHT);
+            if (startTime != null) {
+                drawPulsingRingGlow(graphics, bounds, startTime);
+            }
         }
 
         return null;
 
+    }
+
+    private void drawPulsingRingGlow(Graphics2D g, Rectangle bounds, long startTime) {
+        long elapsed = System.currentTimeMillis() - startTime;
+        if (elapsed >= GLOW_DURATION_MS) return;
+
+        // Progress from 0.0 to 1.0 over the duration
+        float progress = elapsed / (float) GLOW_DURATION_MS;
+
+        // Create a smooth pulsing alpha using sine wave (breathes in/out)
+        float pulsePhase = elapsed / 1000.0f * PULSE_SPEED * (float) Math.PI * 2;
+        float pulse = (float) Math.sin(pulsePhase);
+        pulse = (pulse + 1) / 2;  // Convert -1..1 → 0..1
+
+        // Base alpha starts strong and fades out over duration
+        int baseAlpha = (int) (180 * (1 - progress));  // 180 → 0
+        int alpha = (int) (baseAlpha * (0.6f + 0.4f * pulse));  // Pulse between ~60% and 100% of base
+
+        if (alpha <= 0) return;
+
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        Color glowColor = new Color(
+                GLOW_COLOR.getRed(),
+                GLOW_COLOR.getGreen(),
+                GLOW_COLOR.getBlue(),
+                Math.max(10, alpha)  // Minimum 10 to avoid full vanish
+        );
+
+        g.setColor(glowColor);
+        g.setStroke(new BasicStroke(RING_THICKNESS, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+        // Inset rectangle to keep glow strictly inside bounds
+        int x = bounds.x + INNER_PADDING;
+        int y = bounds.y + INNER_PADDING;
+        int width = bounds.width - 2 * INNER_PADDING;
+        int height = bounds.height - 2 * INNER_PADDING;
+
+        // Draw rounded rectangle ring
+        g.drawRoundRect(x, y, width, height, 8, 8);
     }
 
     private void loadLockImage()
