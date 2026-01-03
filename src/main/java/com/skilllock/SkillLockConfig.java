@@ -78,13 +78,13 @@ public interface SkillLockConfig extends Config
     }
 
     @ConfigItem(
-            keyName = "defense",
-            name = "Defense",
+            keyName = "defence",
+            name = "Defence",
             description = "Lock or Unlock the Defense skill",
             section = lockSkills,
             position = 6
     )
-    default boolean defense()
+    default boolean defence()
     {
         return false;
     }
@@ -378,14 +378,14 @@ public interface SkillLockConfig extends Config
     }
 
     @ConfigItem(
-            keyName = "defense_level",
-            name = "Defense Level",
+            keyName = "defence_level",
+            name = "Defence Level",
             description = "Set a static Defense level",
             section = setLevels,
             position = 31
     )
     @Range(min = 0, max = 99)
-    default int defense_level()
+    default int defence_level()
     {
         return 0;
     }

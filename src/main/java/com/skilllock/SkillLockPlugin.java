@@ -133,6 +133,7 @@ public class SkillLockPlugin extends Plugin
             String val = configManager.getConfiguration("skilllock",name,String.class);
             boolean locked = "true".equalsIgnoreCase(val);
             val = configManager.getConfiguration("skilllock",name+"_level",String.class);
+            if (val == null) continue;
             int level = Integer.parseInt(val);
 
             // 3 columns, 8 rows
@@ -252,45 +253,51 @@ public class SkillLockPlugin extends Plugin
 
         // Get menu entries and make sure it is a skill we have right-clicked
         MenuEntry[] menuEntries = event.getMenuEntries();
-        if (menuEntries[3] == null || !menuEntries[3].getOption().startsWith("View") || !menuEntries[3].getOption().endsWith("guide")) return;
-
-        // Get the skill name from the menu entry
-        String skillName = menuEntries[3].getOption().split(" ")[1].replaceAll("<col=\\w{6}>([^<]+)</col>", "$1");
-        // Normalize it for the config name
-        String configName = skillName.toLowerCase();
-
-        // Create the custom menu entry
-        MenuEntry toggle = client.createMenuEntry(0)
-                .setOption(getSkillLockState(configName) ? "Unlock" : "Lock")
-                .setTarget("<col=ff981f>" + skillName + "</col> level")
-                .setType(MenuAction.RUNELITE)
-                .onClick(e -> {
-                    toggleSkillLock(configName);
-                });
-
-        MenuEntry setSkill = client.createMenuEntry(0)
-                .setOption("Set")
-                .setTarget("<col=ff981f>" + skillName + "</col> level")
-                .setType(MenuAction.RUNELITE)
-                .onClick(e -> {
-                    openLevelInputDialog(configName);
-                });
-
-        boolean isLocked = getSkillLockState(configName);
-        MenuEntry[] newMenuEntries = new MenuEntry[]{menuEntries[0], menuEntries[1],menuEntries[2],menuEntries[3]};
-
-        // If the skill is locked only show the toggle button
-        if (isLocked)
+        if (menuEntries.length >= 4)
         {
-            newMenuEntries = new MenuEntry[]{menuEntries[0], toggle, menuEntries[1], menuEntries[2], menuEntries[3]};
-        }
-        // Also show the set skill option
-        else
-        {
-            newMenuEntries = new MenuEntry[]{menuEntries[0], setSkill, toggle, menuEntries[1], menuEntries[2], menuEntries[3]};
+            if (menuEntries[3] == null || !menuEntries[3].getOption().startsWith("View") || !menuEntries[3].getOption().endsWith("guide")) return;
+
+            // Get the skill name from the menu entry
+            String skillName = menuEntries[3].getOption().split(" ")[1].replaceAll("<col=\\w{6}>([^<]+)</col>", "$1");
+            // Normalize it for the config name
+            String configName = skillName.toLowerCase();
+
+            // Create the custom menu entry
+            MenuEntry toggle = client.createMenuEntry(0)
+                    .setOption(getSkillLockState(configName) ? "Unlock" : "Lock")
+                    .setTarget("<col=ff981f>" + skillName + "</col> level")
+                    .setType(MenuAction.RUNELITE)
+                    .onClick(e -> {
+                        toggleSkillLock(configName);
+                    });
+
+            MenuEntry setSkill = client.createMenuEntry(0)
+                    .setOption("Set")
+                    .setTarget("<col=ff981f>" + skillName + "</col> level")
+                    .setType(MenuAction.RUNELITE)
+                    .onClick(e -> {
+                        openLevelInputDialog(configName);
+                    });
+
+            boolean isLocked = getSkillLockState(configName);
+            MenuEntry[] newMenuEntries = new MenuEntry[]{menuEntries[0], menuEntries[1],menuEntries[2],menuEntries[3]};
+
+            // If the skill is locked only show the toggle button
+            if (isLocked)
+            {
+                newMenuEntries = new MenuEntry[]{menuEntries[0], toggle, menuEntries[1], menuEntries[2], menuEntries[3]};
+            }
+            // Also show the set skill option
+            else
+            {
+                newMenuEntries = new MenuEntry[]{menuEntries[0], setSkill, toggle, menuEntries[1], menuEntries[2], menuEntries[3]};
+            }
+
+            client.setMenuEntries(newMenuEntries);
         }
 
-        client.setMenuEntries(newMenuEntries);
+
+
 
     }
 
