@@ -193,11 +193,11 @@ public class SkillLockOverlay extends Overlay
 
     private void loadBackgroundImage()
     {
-        try (InputStream is = SkillLockOverlay.class.getResourceAsStream("/com/skilllock/background-sm.png"))
+        try (InputStream is = SkillLockOverlay.class.getResourceAsStream("/com/skilllock/background.png"))
         {
             if (is == null)
             {
-                log.error("lock.png not found! Check: src/main/resources/com/skilllock/background-sm.png");
+                log.error("lock.png not found! Check: src/main/resources/com/skilllock/background.png");
                 backgroundImage = null;
                 return;
             }
