@@ -106,20 +106,19 @@ public class SkillLockOverlay extends Overlay
     @Override
     public Dimension render(Graphics2D graphics)
     {
-        // Visibility check
-        if(!plugin.isSkillsTabOpen() || backgroundImage == null || lockImage == null)
-        {
-            return null;
-        }
-
-        // Check to see if skillWidget is visible and assets are loaded
         Widget skillWidget = client.getWidget(ComponentID.SKILLS_CONTAINER);
-        if (skillWidget == null || skillWidget.isHidden())
+        // Visibility check
+        if(!plugin.isSkillsTabOpen() || skillWidget == null|| skillWidget.isHidden() || backgroundImage == null || lockImage == null)
         {
             return null;
         }
 
-        String hoverSkill = findHoverSkill();
+        // Get live location of the widget (updates when sidebar opens/resizes)
+        Point basePoint = skillWidget.getCanvasLocation();
+        int baseX = basePoint.getX();
+        int baseY = basePoint.getY() + 1;
+
+        String hoverSkill = findHoverSkill(baseX, baseY);
         Set<String> hiddenSkills = getHiddenSkills(hoverSkill);
         boolean shiftDown = client.isKeyPressed(KeyCode.KC_SHIFT);
 
@@ -129,16 +128,18 @@ public class SkillLockOverlay extends Overlay
         }
         graphics.setFont(skillFont);
 
-        for( int i = 0; i< plugin.skillLocations.size(); i++ )
+        for( SkillLocation loc : plugin.skillLocations )
         {
-            SkillLocation loc = plugin.skillLocations.get(i);
+            // Calculate the ACTUAL screen position for this time
+            int screenX = baseX + loc.x;
+            int screenY = baseY + loc.y;
 
             if (hiddenSkills.contains(loc.name) || (loc.name.equals(hoverSkill) && shiftDown))
             {
                 continue;
             }
 
-            renderSkill(graphics,loc);
+            renderSkill(graphics,loc, screenX, screenY);
         }
         return null;
     }
@@ -251,7 +252,7 @@ public class SkillLockOverlay extends Overlay
         g.drawRoundRect(x, y, width, height, 8, 8);
     }
 
-    private String findHoverSkill()
+    private String findHoverSkill(int baseX, int baseY)
     {
         Point mousePos = client.getMouseCanvasPosition();
         int mx = mousePos.getX();
@@ -259,16 +260,15 @@ public class SkillLockOverlay extends Overlay
 
         for (SkillLocation loc : plugin.skillLocations)
         {
-            if (loc.name.equals("total"))
-            {
-                // Total Level Logic
-                if (mx >= loc.x && mx <= loc.x + TOTAL_LEVEL_WIDTH && my >= loc.y && my <= loc.y + TOTAL_LEVEL_HEIGHT)
-                {
-                    return loc.name;
-                }
-            }
+            // Calculate the screen bounds for this specific skill relative to the anchor (Skill Container)
+            int sx = baseX + loc.x;
+            int sy = baseY + loc.y;
+
+            int width = loc.name.equals("total") ? TOTAL_LEVEL_WIDTH : RECT_WIDTH;
+            int height = loc.name.equals("total") ? TOTAL_LEVEL_HEIGHT : RECT_HEIGHT;
+
             //Precise skill box bounds
-            if (mx >= loc.x && mx <= loc.x + RECT_WIDTH && my >= loc.y && my <= loc.y + RECT_HEIGHT)
+            if (mx >= sx && mx <= sx + width && my >= sy && my <= sy + height)
             {
                 return loc.name;
             }
@@ -379,9 +379,9 @@ public class SkillLockOverlay extends Overlay
         }
     }
 
-    private void renderSkill(Graphics2D graphics, SkillLocation loc)
+    private void renderSkill(Graphics2D graphics, SkillLocation loc, int screenX, int screenY)
     {
-        Point canvasPoint = new Point(loc.x+OFFSET_X,loc.y+OFFSET_Y);
+        Point canvasPoint = new Point(screenX + OFFSET_X,screenY + OFFSET_Y);
         // Draw background
         if (loc.level > 0 || loc.isLocked)
         {
@@ -392,7 +392,7 @@ public class SkillLockOverlay extends Overlay
         {
             // Greyscale the widget
             graphics.setColor(GREYSCALE_FILL);
-            graphics.fillRect(loc.x,loc.y,RECT_WIDTH,RECT_HEIGHT);
+            graphics.fillRect(screenX,screenY,RECT_WIDTH,RECT_HEIGHT);
             // Draw the lock image over the greyscale
             OverlayUtil.renderImageLocation(graphics,canvasPoint,lockImage);
         }
@@ -401,13 +401,12 @@ public class SkillLockOverlay extends Overlay
             // Text Calculation
             String text = String.valueOf(loc.level);
             FontMetrics fm = graphics.getFontMetrics();
-            int textX = loc.x + ((RECT_WIDTH + OFFSET_X - fm.stringWidth(text)) / 2);
-            int textY = loc.y + ((RECT_HEIGHT - OFFSET_Y + 2 + fm.getHeight()) / 2);
+            int textX = screenX + ((RECT_WIDTH + OFFSET_X - fm.stringWidth(text)) / 2);
+            int textY = screenY + ((RECT_HEIGHT - OFFSET_Y + 2 + fm.getHeight()) / 2);
 
             // Shadow
             graphics.setColor(Color.BLACK);
             graphics.drawString(text, textX + 1, textY + 1);
-
             // Main Yellow Text
             graphics.setColor(Color.YELLOW);
             graphics.drawString(text, textX, textY);
@@ -415,9 +414,9 @@ public class SkillLockOverlay extends Overlay
 
         // Glow logic
         Long startTime = plugin.getGlowingSkills().get(loc.name);
-        Rectangle bounds = new Rectangle(loc.x, loc.y, RECT_WIDTH, RECT_HEIGHT);
         if (startTime != null)
         {
+            Rectangle bounds = new Rectangle(screenX, screenY, RECT_WIDTH, RECT_HEIGHT);
             drawPulsingRingGlow(graphics, bounds, startTime);
         }
     }

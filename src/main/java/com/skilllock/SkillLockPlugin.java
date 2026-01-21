@@ -191,17 +191,6 @@ public class SkillLockPlugin extends Plugin
 
     private List<SkillLocation> createSkillLocations()
     {
-        final Widget skillContainer = client.getWidget(ComponentID.SKILLS_CONTAINER);
-        // Make sure skillContainer is not null
-        if (skillContainer == null || skillContainer.isHidden() || skillContainer.getCanvasLocation() == null)
-        {
-            return Collections.emptyList();
-        }
-
-        // Define starting values for X and Y
-        final int baseX = skillContainer.getCanvasLocation().getX();
-        final int baseY = skillContainer.getCanvasLocation().getY() + 1;
-
         // Create an array list with the correct length
         List<SkillLocation> locations = new ArrayList<>();
 
@@ -217,14 +206,14 @@ public class SkillLockPlugin extends Plugin
             int col = i % 3;
             int row = i / 3;
 
-            int x = baseX + col * SkillLockOverlay.RECT_WIDTH;
-            int y = baseY + row * SkillLockOverlay.RECT_HEIGHT;
+            int offX = col * SkillLockOverlay.RECT_WIDTH;
+            int offY = row * SkillLockOverlay.RECT_HEIGHT;
 
-            locations.add(new SkillLocation(skillName, x, y, (level == null ? 0 : level), isLocked));
+            locations.add(new SkillLocation(skillName, offX, offY, (level == null ? 0 : level), isLocked));
             // Add total level to list
             if (skill.equals(Skill.CONSTRUCTION))
             {
-                locations.add(new SkillLocation("total",x+2,y+30,0, false));
+                locations.add(new SkillLocation("total",offX + 2,offY + 30,0, false));
             }
         }
         return locations;
